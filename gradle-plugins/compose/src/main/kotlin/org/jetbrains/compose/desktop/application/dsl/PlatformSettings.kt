@@ -49,6 +49,7 @@ open class MacOSPlatformSettings @Inject constructor(objects: ObjectFactory): Pl
     }
 
     val provisioningProfile: RegularFileProperty = objects.fileProperty()
+    val runtimeProvisioningProfile: RegularFileProperty = objects.fileProperty()
 
     internal val infoPlistSettings = InfoPlistSettings()
     fun infoPlist(fn: Action<InfoPlistSettings>) {

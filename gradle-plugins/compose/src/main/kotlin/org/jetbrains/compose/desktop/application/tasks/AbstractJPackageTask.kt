@@ -149,6 +149,11 @@ abstract class AbstractJPackageTask @Inject constructor(
     @get:PathSensitive(PathSensitivity.ABSOLUTE)
     val macProvisioningProfile: RegularFileProperty = objects.fileProperty()
 
+    @get:InputFile
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.ABSOLUTE)
+    val macRuntimeProvisioningProfile: RegularFileProperty = objects.fileProperty()
+
     @get:Input
     @get:Optional
     val winConsole: Property<Boolean?> = objects.nullableProperty()
@@ -490,8 +495,23 @@ abstract class AbstractJPackageTask @Inject constructor(
 
     override fun checkResult(result: ExecResult) {
         super.checkResult(result)
+        addRuntimeProvisioningProfile()
         val outputFile = findOutputFileOrDir(destinationDir.ioFile, targetFormat)
         logger.lifecycle("The distribution is written to ${outputFile.canonicalPath}")
+    }
+
+    private fun addRuntimeProvisioningProfile() {
+        if (currentOS != OS.MacOS || targetFormat != TargetFormat.AppImage) return
+        if (macAppStore.orNull != true) return
+        val file = macRuntimeProvisioningProfile.orNull ?: return
+        val appDir = destinationDir.ioFile.resolve("${packageName.get()}.app")
+        val runtimeDir = appDir.resolve("Contents/runtime")
+        val resultFile = runtimeDir.resolve("Contents/embedded.provisionprofile")
+
+        file.asFile.copyTo(resultFile, overwrite = true)
+
+        macSigner?.sign(runtimeDir)
+        macSigner?.sign(appDir)
     }
 
     override fun initState() {

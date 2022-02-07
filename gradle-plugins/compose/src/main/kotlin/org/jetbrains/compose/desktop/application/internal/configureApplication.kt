@@ -314,6 +314,7 @@ internal fun AbstractJPackageTask.configurePlatformSettings(app: Application) {
                 packageBuildVersion.set(packageBuildVersionFor(project, app, targetFormat))
                 nonValidatedMacBundleID.set(provider { mac.bundleID })
                 macProvisioningProfile.set(mac.provisioningProfile)
+                macRuntimeProvisioningProfile.set(mac.runtimeProvisioningProfile)
                 macExtraPlistKeysRawXml.set(provider { mac.infoPlistSettings.extraKeysRawXml })
                 nonValidatedMacSigningSettings = app.nativeDistributions.macOS.signing
                 iconFile.set(mac.iconFile.orElse(DefaultIcons.forMac(project)))
