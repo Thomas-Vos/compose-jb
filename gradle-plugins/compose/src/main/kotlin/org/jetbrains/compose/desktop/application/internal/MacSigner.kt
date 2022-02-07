@@ -32,7 +32,7 @@ internal class MacSigner(
         )
     }
 
-    fun sign(file: File) {
+    fun sign(file: File, forceEntitlements: Boolean = false) {
         val args = arrayListOf(
             "-vvvv",
             "--timestamp",
@@ -47,7 +47,7 @@ internal class MacSigner(
             args.add(it.absolutePath)
         }
 
-        if (Files.isExecutable(file.toPath())) {
+        if (forceEntitlements || Files.isExecutable(file.toPath())) {
             settings.entitlementsFile?.let {
                 args.add("--entitlements")
                 args.add(it.absolutePath)

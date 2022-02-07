@@ -514,8 +514,8 @@ abstract class AbstractJPackageTask @Inject constructor(
 
         file.asFile.copyTo(resultFile, overwrite = true)
 
-        macSigner?.sign(runtimeDir)
-        macSigner?.sign(appDir)
+        macSigner?.sign(runtimeDir, forceEntitlements = true)
+        macSigner?.sign(appDir, forceEntitlements = true)
     }
 
     override fun initState() {
