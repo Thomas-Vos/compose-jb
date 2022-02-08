@@ -32,7 +32,15 @@ internal class MacSigner(
         )
     }
 
-    fun sign(file: File, forceEntitlements: Boolean = false) {
+    /**
+     * If [entitlements] file is provided, executables are signed with entitlements.
+     * Set [forceEntitlements] to `true` to sign all types of files with the provided [entitlements].
+     */
+    fun sign(
+        file: File,
+        entitlements: File? = null,
+        forceEntitlements: Boolean = false
+    ) {
         val args = arrayListOf(
             "-vvvv",
             "--timestamp",
@@ -48,7 +56,7 @@ internal class MacSigner(
         }
 
         if (forceEntitlements || Files.isExecutable(file.toPath())) {
-            settings.entitlementsFile?.let {
+            entitlements?.let {
                 args.add("--entitlements")
                 args.add(it.absolutePath)
             }

@@ -30,6 +30,10 @@ import javax.inject.Inject
 import kotlin.collections.HashMap
 import kotlin.collections.HashSet
 import kotlin.collections.ArrayList
+import kotlin.io.path.isExecutable
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.isSymbolicLink
+import kotlin.io.path.name
 
 abstract class AbstractJPackageTask @Inject constructor(
     @get:Input
@@ -140,6 +144,11 @@ abstract class AbstractJPackageTask @Inject constructor(
     @get:PathSensitive(PathSensitivity.ABSOLUTE)
     val macEntitlementsFile: RegularFileProperty = objects.fileProperty()
 
+    @get:InputFile
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.ABSOLUTE)
+    val macRuntimeEntitlementsFile: RegularFileProperty = objects.fileProperty()
+
     @get:Input
     @get:Optional
     val packageBuildVersion: Property<String?> = objects.nullableProperty()
@@ -209,12 +218,8 @@ abstract class AbstractJPackageTask @Inject constructor(
     private val macSigner: MacSigner? by lazy {
         val nonValidatedSettings = nonValidatedMacSigningSettings
         if (currentOS == OS.MacOS && nonValidatedSettings?.sign?.get() == true) {
-            val validatedSettings = nonValidatedSettings.validate(
-                bundleIDProvider = nonValidatedMacBundleID,
-                project = project,
-                appStoreProvider = macAppStore,
-                entitlementsFileProvider = macEntitlementsFile
-            )
+            val validatedSettings =
+                nonValidatedSettings.validate(nonValidatedMacBundleID, project, macAppStore)
             MacSigner(validatedSettings, runExternalTool)
         } else null
     }
@@ -499,23 +504,75 @@ abstract class AbstractJPackageTask @Inject constructor(
 
     override fun checkResult(result: ExecResult) {
         super.checkResult(result)
-        addRuntimeProvisioningProfile()
+        modifyRuntimeOnMacOsIfNeeded()
         val outputFile = findOutputFileOrDir(destinationDir.ioFile, targetFormat)
         logger.lifecycle("The distribution is written to ${outputFile.canonicalPath}")
     }
 
-    private fun addRuntimeProvisioningProfile() {
+    private fun modifyRuntimeOnMacOsIfNeeded() {
         if (currentOS != OS.MacOS || targetFormat != TargetFormat.AppImage) return
-        if (macAppStore.orNull != true) return
-        val file = macRuntimeProvisioningProfile.orNull ?: return
+        val runtimeProvisioningProfile = macRuntimeProvisioningProfile.orNull
+        val entitlementsFile = macEntitlementsFile.orNull
+        val runtimeEntitlementsFile = macRuntimeEntitlementsFile.orNull
+
+        if (runtimeProvisioningProfile == null &&
+            // When resigning the runtime, an app entitlements file is also needed.
+            (runtimeEntitlementsFile == null || entitlementsFile == null)
+        ) {
+            // No need to edit the runtime as there are no changed from jpackage.
+            return
+        }
+
         val appDir = destinationDir.ioFile.resolve("${packageName.get()}.app")
         val runtimeDir = appDir.resolve("Contents/runtime")
-        val resultFile = runtimeDir.resolve("Contents/embedded.provisionprofile")
 
-        file.asFile.copyTo(resultFile, overwrite = true)
+        // Add the provisioning profile
+        runtimeProvisioningProfile?.let {
+            addRuntimeProvisioningProfile(runtimeDir, it.asFile)
+        }
 
-        macSigner?.sign(runtimeDir, forceEntitlements = true)
-        macSigner?.sign(appDir, forceEntitlements = true)
+        // Resign the runtime completely (and also the app dir only)
+        resignRuntimeAndAppDir(appDir, runtimeDir)
+    }
+
+    private fun addRuntimeProvisioningProfile(
+        runtimeDir: File,
+        runtimeProvisioningProfile: File
+    ) {
+        runtimeProvisioningProfile.copyTo(
+            target = runtimeDir.resolve("Contents/embedded.provisionprofile"),
+            overwrite = true
+        )
+    }
+
+    private fun resignRuntimeAndAppDir(
+        appDir: File,
+        runtimeDir: File
+    ) {
+        val appEntitlements = macEntitlementsFile.ioFileOrNull
+        val runtimeEntitlements = macRuntimeEntitlementsFile.ioFileOrNull ?: appEntitlements
+
+        // Sign all libs and executables in runtime
+        runtimeDir.walk().forEach { file ->
+            val path = file.toPath()
+            if (path.isRegularFile() && (path.isExecutable() || path.toString().isDylibPath)) {
+                if (path.isSymbolicLink()) {
+                    // Ignore symbolic links
+                } else {
+                    // Resign file
+                    macSigner?.unsign(file)
+                    macSigner?.sign(file, runtimeEntitlements)
+                }
+            }
+        }
+
+        // Resign runtime directory
+        macSigner?.unsign(runtimeDir)
+        macSigner?.sign(runtimeDir, runtimeEntitlements, forceEntitlements = true)
+
+        // Resign app directory (contents other than runtime were already signed by jpackage)
+        macSigner?.unsign(appDir)
+        macSigner?.sign(appDir, appEntitlements, forceEntitlements = true)
     }
 
     override fun initState() {

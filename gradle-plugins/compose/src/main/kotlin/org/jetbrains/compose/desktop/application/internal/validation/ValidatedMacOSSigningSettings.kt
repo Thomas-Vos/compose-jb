@@ -6,7 +6,6 @@
 package org.jetbrains.compose.desktop.application.internal.validation
 
 import org.gradle.api.Project
-import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Provider
 import org.jetbrains.compose.desktop.application.dsl.MacOSSigningSettings
 import org.jetbrains.compose.desktop.application.internal.ComposeProperties
@@ -19,8 +18,7 @@ internal data class ValidatedMacOSSigningSettings(
     val identity: String,
     val keychain: File?,
     val prefix: String,
-    private val appStore: Boolean,
-    val entitlementsFile: File?
+    private val appStore: Boolean
 ) {
     val fullDeveloperID: String
         get() {
@@ -37,8 +35,7 @@ internal data class ValidatedMacOSSigningSettings(
 internal fun MacOSSigningSettings.validate(
     bundleIDProvider: Provider<String?>,
     project: Project,
-    appStoreProvider: Provider<Boolean?>,
-    entitlementsFileProvider: RegularFileProperty
+    appStoreProvider: Provider<Boolean?>
 ): ValidatedMacOSSigningSettings {
     check(currentOS == OS.MacOS) { ERR_WRONG_OS }
 
@@ -58,15 +55,13 @@ internal fun MacOSSigningSettings.validate(
         keychainFile
     } else null
     val appStore = appStoreProvider.orNull == true
-    val entitlementsFile = entitlementsFileProvider.orNull?.asFile
 
     return ValidatedMacOSSigningSettings(
         bundleID = bundleID,
         identity = signIdentity,
         keychain = keychainFile,
         prefix = signPrefix,
-        appStore = appStore,
-        entitlementsFile = entitlementsFile
+        appStore = appStore
     )
 }
 
